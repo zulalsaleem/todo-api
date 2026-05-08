@@ -1,0 +1,30 @@
+# Dependencies — Docker installs these fresh
+# inside container from package.json
+node_modules
+
+# Secrets — passed via docker-compose environment
+.env
+
+# Database files — stored in Docker volume
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Logs — not needed in image
+npm-debug.log
+
+# Git files — not needed in container
+.git
+.gitignore
+
+# Frontend files — mounted via volume in nginx
+frontend-dist
+
+# Nginx config — mounted via volume
+nginx
+
+# Docker files — container doesn't need these
+docker-compose.yml
+
+# Docs — not needed in container
+README.md

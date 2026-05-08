@@ -1,0 +1,89 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────
+# NETWORKS
+# Private network between containers
+# They talk to each other using service names
+# Internet cannot access internal services!
+# ─────────────────────────────────────────────
+networks:
+  todo-network:
+    driver: bridge
+
+# ─────────────────────────────────────────────
+# VOLUMES
+# Persistent storage managed by Docker
+# Data survives container restarts/deletion
+# ─────────────────────────────────────────────
+volumes:
+  db-data:
+
+services:
+
+  # ───────────────────────────────────────────
+  # SERVICE 1: Node.js API
+  # ───────────────────────────────────────────
+  api:
+    # Build image from Dockerfile in current folder
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: todo-api
+    restart: always
+
+    # Environment variables for container
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+
+    # expose = only accessible INSIDE Docker network
+    # NOT accessible from internet!
+    # Only nginx container can reach port 3000
+    expose:
+      - "3000"
+
+    # Mount volume for database persistence
+    volumes:
+      - db-data:/app/data
+
+    networks:
+      - todo-network
+
+    # Health check — Docker pings this every 30s
+    # nginx waits until this passes before starting!
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ───────────────────────────────────────────
+  # SERVICE 2: Nginx
+  # ───────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: todo-nginx
+    restart: always
+
+    # ports = accessible from internet!
+    # Host port 80 → Container port 80
+    ports:
+      - "80:80"
+
+    volumes:
+      # Mount React files into nginx web root
+      - ./frontend-dist:/usr/share/nginx/html:ro
+      # Mount our custom nginx config
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/todo.conf:ro
+
+    # Wait for api to be healthy before starting!
+    depends_on:
+      api:
+        condition: service_healthy
+
+    networks:
+      - todo-network
