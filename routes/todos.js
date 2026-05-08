@@ -63,6 +63,43 @@ router.post('/', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
+// GET /todos/search?q=keyword
+// Search todos by title
+// ─────────────────────────────────────────────
+router.get('/search', (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim() === '') {
+      return res.status(400).json({ 
+        error: 'Search query "q" is required' 
+      });
+    }
+
+    if (q.trim().length > 100) {
+      return res.status(400).json({ 
+        error: 'Search query cannot exceed 100 characters' 
+      });
+    }
+
+    const results = db.prepare(`
+      SELECT * FROM todos
+      WHERE user_id = ? AND title LIKE ?
+      ORDER BY created_at DESC
+    `).all(req.user.userId, `%${q.trim()}%`);
+
+    res.json({
+      query: q,
+      count: results.length,
+      results: results
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+
+// ─────────────────────────────────────────────
 // PUT - Update todo — only if owned by this user
 // ─────────────────────────────────────────────
 router.put('/:id', (req, res) => {
