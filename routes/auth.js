@@ -78,9 +78,13 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Server error during login' });
-  }
+  console.error('Login error:', error);
+  res.status(500).json({
+    error: 'Server error during login',
+    timestamp: new Date().toISOString(),
+    support: 'Please try again or contact support'
+  });
+}
 });
 
 module.exports = router;
