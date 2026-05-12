@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────
+# CI Workflow: Test on every push and PR
+# ─────────────────────────────────────────────
+name: CI — Test & Validate
+
+on:
+  push:
+    branches: ["**"]      # Every branch
+  pull_request:
+    branches: [main]      # PRs targeting main
+
+jobs:
+  # ─────────────────────────────────────────
+  # JOB 1: Run tests
+  # ─────────────────────────────────────────
+  test:
+    name: Test Node.js API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Run tests
+        run: npm test
+        env:
+          JWT_SECRET: test_secret_for_ci_only
+          JWT_EXPIRES_IN: 24h
+          NODE_ENV: test
+
+  # ─────────────────────────────────────────
+  # JOB 2: Validate Docker build
+  # Runs in PARALLEL with test job!
+  # ─────────────────────────────────────────
+  docker-build:
+    name: Validate Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t todo-api:test .
+          echo "✅ Docker image built successfully"
+
+      - name: Test Docker image starts
+        run: |
+          docker run -d \
+            --name test-container \
+            -p 3000:3000 \
+            -e JWT_SECRET=test_secret \
+            -e JWT_EXPIRES_IN=24h \
+            -e PORT=3000 \
+            -e NODE_ENV=test \
+            todo-api:test
+
+          sleep 8
+
+          RESPONSE=$(curl -s http://localhost:3000/health || echo "failed")
+          echo "Response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "ok"; then
+            echo "✅ Container health check passed"
+          else
+            echo "❌ Container failed"
+            docker logs test-container
+            exit 1
+          fi
+
+          docker stop test-container
+          docker rm test-container
